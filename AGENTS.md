@@ -15,12 +15,13 @@ Extract clean peptide sequence and binding site pairs from various sources (most
   - Amino acid sequences
   - 3D coordinates, restricted strictly to the **3 backbone atoms** (N, CA, C) per residue instead of the full 37.
 - **Workflow**:
-  - Store source data as compressed files (zip) in the ignored `data/` directory.
+  - Store source data as compressed files (tar/zip) in the ignored `data/` directory.
   - Parse data using **on-the-fly iterators** to avoid extracting source datasets and cluttering the filesystem.
   - Iterators are responsible for yielding a unique, source-specific key per entry. The final LMDB storage keys will be composite (e.g., `source:source_key`) to prevent collisions across datasets.
   - **Iterator Parameter Philosophy**: Do not muddy the standardized output schema with dataset-specific metadata. If a dataset source has unique metadata (like resolution or mol_type), expose them exclusively as optional parameters (defaulting to `None`) on the iterator function itself to allow upstream filtering!
 - **Nullability and Strictness**:
-  - Prefer strong typing and exact data representation over defensive programming.
+  - Prefer strong typing and exact data representation.
+  - **Error Handling in Iterators**: Since Python generators cannot resume after raising an exception, iterators must catch exceptions internally and skip malformed entries to keep iterating. All iterators must expose a `verbose: bool = False` parameter. When `verbose` is `True`, exceptions are printed to stdout. When `False`, entries are skipped silently. This keeps the iterator alive while giving the caller visibility into data quality issues.
   - Do NOT preemptively set every field to nullable. Start strict, and adjust the schema structure as null values are discovered during parsing.
 
 ## Output Schema

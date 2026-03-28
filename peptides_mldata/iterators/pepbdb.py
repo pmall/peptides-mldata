@@ -33,7 +33,8 @@ def _parse_pdb_stream(stream) -> Tuple[str, str, np.ndarray]:
     Missing backbone atoms are filled with np.nan.
     """
     parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("x", io.StringIO(stream.read().decode("utf-8")))
+    content = stream.read().decode("utf-8")
+    structure = parser.get_structure("x", io.StringIO(content))
 
     model = structure[0]
     chain_id = None
@@ -68,7 +69,8 @@ def iter_pepbdb(
     nonstandard_aa: bool = None,
     resolution_min: float = None,
     resolution_max: float = None,
-    mol_type: str = None
+    mol_type: str = None,
+    verbose: bool = False
 ) -> Iterator[Dict[str, Any]]:
     """
     Yields parsed records from the PepBDB zip archive on the fly.
@@ -77,12 +79,20 @@ def iter_pepbdb(
     applies metadata filters, then fetches receptor.pdb and peptide.pdb
     by name for each passing entry and yields immediately.
     Zero buffering of PDB data.
+
+    Malformed or missing entries are skipped to keep the iterator alive.
+    Set verbose=True to print exceptions to stdout.
     """
     with zipfile.ZipFile(archive_path, "r") as zf:
         with zf.open("peptidelist.txt") as f:
             for line in io.TextIOWrapper(f, encoding="utf-8"):
-                parts = line.strip().split()
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
                 if len(parts) < 11:
+                    if verbose:
+                        print(f"[pepbdb] Skip malformed index entry: {line}")
                     continue
 
                 pdb_id = parts[0]
@@ -103,15 +113,17 @@ def iter_pepbdb(
                 if mol_type is not None and entry_mol_type != mol_type:
                     continue
 
-                receptor_path = f"pepbdb/{folder}/receptor.pdb"
-                peptide_path = f"pepbdb/{folder}/peptide.pdb"
-
                 try:
+                    receptor_path = f"pepbdb/{folder}/receptor.pdb"
+                    peptide_path = f"pepbdb/{folder}/peptide.pdb"
+
                     with zf.open(receptor_path) as rec_stream:
                         rec_chain_id, rec_seq, rec_coords = _parse_pdb_stream(rec_stream)
                     with zf.open(peptide_path) as pep_stream:
                         pep_chain_id, pep_seq, pep_coords = _parse_pdb_stream(pep_stream)
-                except KeyError:
+                except Exception as e:
+                    if verbose:
+                        print(f"[pepbdb] Skip {folder}: {e}")
                     continue
 
                 if not rec_chain_id or not rec_chain_id.strip():
