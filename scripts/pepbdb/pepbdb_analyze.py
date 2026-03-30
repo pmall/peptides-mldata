@@ -1,8 +1,8 @@
+import argparse
 import numpy as np
 from peptides_mldata.iterators.pepbdb import iter_pepbdb
 
 # High-quality filtering parameters
-PEPTIDE_MAX_LEN = 32
 RESOL_MIN = 0.001
 RESOL_MAX = 2.5
 MOL_TYPE = "prot"
@@ -10,9 +10,9 @@ NONSTANDARD = False
 
 SITE_BIN_SIZE = 32
 
-def main():
+def analyze_pepbdb(min_pep_len: int, max_pep_len: int):
     print(f"High-Quality PepBDB Analysis")
-    print(f"Filters: Pep Len <= {PEPTIDE_MAX_LEN} | Res [{RESOL_MIN}-{RESOL_MAX}] | Type: {MOL_TYPE} | Std AA: {not NONSTANDARD}\n")
+    print(f"Filters: Pep [{min_pep_len}-{max_pep_len}] | Res [{RESOL_MIN}-{RESOL_MAX}] | Type: {MOL_TYPE} | Std AA: {not NONSTANDARD}\n")
 
     site_lengths = []
     total_yielded = 0
@@ -24,16 +24,14 @@ def main():
         resolution_min=RESOL_MIN,
         resolution_max=RESOL_MAX,
         mol_type=MOL_TYPE,
+        min_pep_len=min_pep_len,
+        max_pep_len=max_pep_len,
         verbose=False # Keep it clean since we are analyzing
     )
 
     for item in iterator:
         total_yielded += 1
-        pep_len = item['peptide']['length']
-        tgt_len = item['target']['length']
-
-        if pep_len <= PEPTIDE_MAX_LEN:
-            site_lengths.append(tgt_len)
+        site_lengths.append(item['target']['length'])
 
         if total_yielded % 500 == 0:
             print(f"  {total_yielded} matches found...")
@@ -68,6 +66,15 @@ def main():
 
     print("\nTotal High-Quality Sample Count:", len(site_lengths))
     print(f"Mean: {np.mean(data):.1f} | Median: {np.median(data):.0f} | Max: {max_site}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Analyze PepBDB binding site lengths within peptide length constraints.")
+    parser.add_argument("--min_pep_len", type=int, default=4, help="Minimum peptide length (default: 4)")
+    parser.add_argument("--max_pep_len", type=int, default=32, help="Maximum peptide length (default: 32)")
+    args = parser.parse_args()
+
+    analyze_pepbdb(args.min_pep_len, args.max_pep_len)
 
 if __name__ == "__main__":
     main()

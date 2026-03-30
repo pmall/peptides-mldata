@@ -70,6 +70,10 @@ def iter_pepbdb(
     resolution_min: float = None,
     resolution_max: float = None,
     mol_type: str = None,
+    min_pep_len: int = None,
+    max_pep_len: int = None,
+    min_target_len: int = None,
+    max_target_len: int = None,
     verbose: bool = False
 ) -> Iterator[Dict[str, Any]]:
     """
@@ -113,12 +117,23 @@ def iter_pepbdb(
                 if mol_type is not None and entry_mol_type != mol_type:
                     continue
 
+                if min_pep_len is not None and int(parts[2]) < min_pep_len:
+                    continue
+                if max_pep_len is not None and int(parts[2]) > max_pep_len:
+                    continue
+
                 try:
                     receptor_path = f"pepbdb/{folder}/receptor.pdb"
                     peptide_path = f"pepbdb/{folder}/peptide.pdb"
 
                     with zf.open(receptor_path) as rec_stream:
                         rec_chain_id, rec_seq, rec_coords = _parse_pdb_stream(rec_stream)
+
+                    if min_target_len is not None and len(rec_seq) < min_target_len:
+                        continue
+                    if max_target_len is not None and len(rec_seq) > max_target_len:
+                        continue
+
                     with zf.open(peptide_path) as pep_stream:
                         pep_chain_id, pep_seq, pep_coords = _parse_pdb_stream(pep_stream)
                 except Exception as e:
