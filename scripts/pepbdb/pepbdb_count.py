@@ -7,11 +7,11 @@ MOL_TYPE = "prot"
 NONSTANDARD = False
 
 
-def count_pepbdb(min_pep_len: int, max_pep_len: int, min_target_len: int, max_target_len: int):
+def count_pepbdb(min_pep_len: int, max_pep_len: int, min_target_len: int, max_target_len: int, archive_path: str):
     print(f"PepBDB Sweet Spot Count: Pep [{min_pep_len}-{max_pep_len}] | Site [{min_target_len}-{max_target_len}]\n")
 
     iterator = iter_pepbdb(
-        archive_path="data/pepbdb-20200318.zip",
+        archive_path=archive_path,
         nonstandard_aa=NONSTANDARD,
         resolution_min=RESOLUTION_MIN,
         resolution_max=RESOLUTION_MAX,
@@ -36,13 +36,15 @@ def count_pepbdb(min_pep_len: int, max_pep_len: int, min_target_len: int, max_ta
 
 def main():
     parser = argparse.ArgumentParser(description="Count PepBDB entries within length constraints.")
+    parser.add_argument("archive_path", nargs="?", default="data/pepbdb-20200318.zip",
+                        help="Path to the PepBDB zip archive (default: data/pepbdb-20200318.zip)")
     parser.add_argument("--min_pep_len", type=int, default=4, help="Minimum peptide length (default: 4)")
     parser.add_argument("--max_pep_len", type=int, default=32, help="Maximum peptide length (default: 32)")
     parser.add_argument("--min_target_len", type=int, default=15, help="Minimum target/site length (default: 15)")
     parser.add_argument("--max_target_len", type=int, default=280, help="Maximum target/site length (default: 280)")
     args = parser.parse_args()
 
-    count_pepbdb(args.min_pep_len, args.max_pep_len, args.min_target_len, args.max_target_len)
+    count_pepbdb(args.min_pep_len, args.max_pep_len, args.min_target_len, args.max_target_len, args.archive_path)
 
 
 if __name__ == "__main__":

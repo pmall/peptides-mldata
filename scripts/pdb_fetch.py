@@ -22,7 +22,7 @@ from peptides_mldata.pdb_api import fetch_batch_chain_metadata, fetch_pdb_struct
 LMDB_MAP_SIZE = 50 * 1024 ** 3  # 50 GB max map (sparse, actual disk usage is minimal)
 
 
-def fetch_pdb(csv_path: str, lmdb_path: str, workers: int = 8, verbose: bool = False):
+def fetch_pdb(lmdb_path: str, csv_path: str, workers: int = 8, verbose: bool = False):
     """
     Read unique PDB IDs from the first column of csv_path,
     download and parse each entry via RCSB, and store in lmdb_path.
@@ -42,7 +42,6 @@ def fetch_pdb(csv_path: str, lmdb_path: str, workers: int = 8, verbose: bool = F
     env = lmdb.open(lmdb_path, map_size=LMDB_MAP_SIZE, max_dbs=0)
     with env.begin() as txn:
         todo = [pid for pid in pdb_ids if txn.get(pid.encode()) is None]
-
     print(f"Skipping {len(pdb_ids) - len(todo)} already stored. Fetching {len(todo)}...")
 
     if not todo:
@@ -66,7 +65,7 @@ def fetch_pdb(csv_path: str, lmdb_path: str, workers: int = 8, verbose: bool = F
         for chain_id, (sequence, coords) in structure.items():
             m = meta.get(chain_id, {})
             chains[chain_id] = {
-                "taxon_id": m.get("taxon_id"),
+                "taxon_ids": m.get("taxon_ids", []),
                 "uniprot_ids": m.get("uniprot_ids", []),
                 "sequence": sequence,
                 "length": len(sequence),
@@ -101,7 +100,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Batch download PDB entries from RCSB and store in LMDB."
     )
-    parser.add_argument("input_csv", help="Path to a CSV file with pdb_id as the first column")
+    parser.add_argument("input_csv",
+                        help="Path to a CSV file with pdb_id as the first column")
     parser.add_argument("lmdb_path", nargs="?", default="data/pdb.lmdb",
                         help="Path to the output LMDB (default: data/pdb.lmdb)")
     parser.add_argument("--workers", type=int, default=8,
@@ -110,7 +110,7 @@ def main():
                         help="Print per-entry status")
     args = parser.parse_args()
 
-    fetch_pdb(args.input_csv, args.lmdb_path, args.workers, args.verbose)
+    fetch_pdb(args.lmdb_path, args.input_csv, args.workers, args.verbose)
 
 
 if __name__ == "__main__":

@@ -1,18 +1,18 @@
 """
 PepBDB data iterator.
 
-Column explanation from the website:
-Col 1 - PDB ID
-Col 2 - peptide chain ID
-Col 3 - peptide length
-Col 4 - number of atoms in peptide
-Col 5 - peptide with nonstandard amino acid ? ( 1 means yes)
-Col 6 - protein chain ID
-Col 7 - number of atoms in protein
-Col 8 - number of atom contacts between peptide and protein
-Col 9 - resolution (-1.00 means NMR structure)
-Col 10 - molecular type
-Cols 11 & 12 - sequence identity with the query (0.0 means no sequence search)
+Column explanation (verified from peptidelist.txt):
+Col 1 [0] - PDB ID
+Col 2 [1] - peptide chain ID
+Col 3 [2] - peptide length
+Col 4 [3] - number of atoms in peptide
+Col 5 [4] - protein chain ID
+Col 6 [5] - number of atoms in protein
+Col 7 [6] - number of atom contacts
+Col 8 [7] - peptide with nonstandard amino acid? (1 means yes)
+Col 9 [8] - (unused/skipped)
+Col 10[9] - resolution (-1.00 means NMR structure)
+Col 11[10]- molecular type
 
 Typical source file: data/pepbdb-20200318.zip
 """
@@ -25,43 +25,40 @@ from Bio.PDB import PDBParser
 from Bio.Data.IUPACData import protein_letters_3to1
 
 
-def _parse_pdb_stream(stream) -> Tuple[str, str, np.ndarray]:
+def _parse_pdb_stream(stream, target_chain_id: str) -> Tuple[str, np.ndarray]:
     """
     Parses an open stream of PDB data using BioPython.
-    Returns (chain_id, sequence_str, coords_array).
-    coords_array shape: (N, 3, 3) representing N residues x 3 backbone atoms (N, CA, C) x 3 dimensions.
-    Missing backbone atoms are filled with np.nan.
+    Returns (sequence_str, coords_array).
     """
     parser = PDBParser(QUIET=True)
     content = stream.read().decode("utf-8")
     structure = parser.get_structure("x", io.StringIO(content))
-
     model = structure[0]
-    chain_id = None
+    
+    if target_chain_id not in model:
+        raise KeyError(f"Chain {target_chain_id} not found in PDB")
+        
+    chain = model[target_chain_id]
     sequence = []
     coords = []
 
-    for chain in model:
-        if chain_id is None:
-            chain_id = chain.id
+    for residue in chain:
+        if residue.id[0] != ' ':  # skip hetero atoms
+            continue
 
-        for residue in chain:
-            if residue.id[0] != ' ':  # skip hetero atoms
-                continue
+        resname = residue.resname.capitalize()
+        aa_char = protein_letters_3to1.get(resname, 'X')
 
-            resname = residue.resname.capitalize()
-            aa_char = protein_letters_3to1.get(resname, 'X')
+        n_coord = residue['N'].coord if 'N' in residue else np.full(3, np.nan)
+        ca_coord = residue['CA'].coord if 'CA' in residue else np.full(3, np.nan)
+        c_coord = residue['C'].coord if 'C' in residue else np.full(3, np.nan)
 
-            n_coord = residue['N'].coord if 'N' in residue else np.full(3, np.nan)
-            ca_coord = residue['CA'].coord if 'CA' in residue else np.full(3, np.nan)
-            c_coord = residue['C'].coord if 'C' in residue else np.full(3, np.nan)
-
-            sequence.append(aa_char)
-            coords.append([n_coord, ca_coord, c_coord])
+        sequence.append(aa_char)
+        coords.append([n_coord, ca_coord, c_coord])
 
     seq_str = "".join(sequence)
     coords_arr = np.array(coords, dtype=np.float32)
-    return chain_id, seq_str, coords_arr
+    return seq_str, coords_arr
 
 
 def iter_pepbdb(
@@ -101,7 +98,7 @@ def iter_pepbdb(
 
                 pdb_id = parts[0]
                 pep_chain = parts[1]
-                prot_chain = parts[5]
+                prot_chain = parts[4]
                 entry_nonstandard_aa = int(parts[7])
                 resolution = float(parts[9])
                 entry_mol_type = parts[10]
@@ -127,7 +124,7 @@ def iter_pepbdb(
                     peptide_path = f"pepbdb/{folder}/peptide.pdb"
 
                     with zf.open(receptor_path) as rec_stream:
-                        rec_chain_id, rec_seq, rec_coords = _parse_pdb_stream(rec_stream)
+                        rec_seq, rec_coords = _parse_pdb_stream(rec_stream, prot_chain)
 
                     if min_target_len is not None and len(rec_seq) < min_target_len:
                         continue
@@ -135,34 +132,25 @@ def iter_pepbdb(
                         continue
 
                     with zf.open(peptide_path) as pep_stream:
-                        pep_chain_id, pep_seq, pep_coords = _parse_pdb_stream(pep_stream)
+                        pep_seq, pep_coords = _parse_pdb_stream(pep_stream, pep_chain)
                 except Exception as e:
                     if verbose:
                         print(f"[pepbdb] Skip {folder}: {e}")
                     continue
-
-                if not rec_chain_id or not rec_chain_id.strip():
-                    rec_chain_id = prot_chain
-                if not pep_chain_id or not pep_chain_id.strip():
-                    pep_chain_id = pep_chain
 
                 yield {
                     "source_key": folder,
                     "source_db": "pepbdb",
                     "pdb_id": pdb_id,
                     "target": {
-                        "chain": rec_chain_id,
+                        "chain": prot_chain,
                         "length": len(rec_seq),
-                        "taxon_id": None,
-                        "protein_id": None,
                         "sequence": rec_seq,
                         "3d_coordinates": rec_coords
                     },
                     "peptide": {
-                        "chain": pep_chain_id,
+                        "chain": pep_chain,
                         "length": len(pep_seq),
-                        "taxon_id": None,
-                        "protein_id": None,
                         "sequence": pep_seq,
                         "3d_coordinates": pep_coords
                     }

@@ -17,8 +17,8 @@ Extract clean peptide sequence and binding site pairs from various sources (most
 - **Workflow**:
   - Store source data as compressed files (tar/zip) in the ignored `data/` directory.
   - Parse data using **on-the-fly iterators** to avoid extracting source datasets and cluttering the filesystem.
-  - Iterators are responsible for yielding a unique, source-specific key per entry.
-  - **Iterator Parameter Philosophy**: 
+  - Iterators are responsible for yielding a unique, source-specific key per entry (e.g. `1a1r_C` for PepBDB).
+  - **Iterator Parameter Philosophy**:
     - Expose metadata (e.g., resolution, mol_type) and filtering constraints (e.g., `min_pep_len`, `max_pep_len`, `min_target_len`, `max_target_len`) as optional parameters (defaulting to `None`) on the iterator function itself.
     - **Perform filtering as early as possible**: If a dataset provides a metadata index (e.g., a text file inside the zip), use it to skip entries before parsing expensive raw data (like PDB coordinates) to optimize performance.
 - **Script Architecture Rules**:
@@ -28,6 +28,11 @@ Extract clean peptide sequence and binding site pairs from various sources (most
   - Prefer strong typing and exact data representation.
   - **Error Handling in Iterators**: Since Python generators cannot resume after raising an exception, iterators must catch exceptions internally and skip malformed entries to keep iterating. All iterators must expose a `verbose: bool = False` parameter. When `verbose` is `True`, exceptions are printed to stdout. When `False`, entries are skipped silently. This keeps the iterator alive while giving the caller visibility into data quality issues.
   - Do NOT preemptively set every field to nullable. Start strict, and adjust the schema structure as null values are discovered during parsing.
+
+## LMDB Strategy
+
+- **One LMDB per source**: each `*_build.py` script writes to a dedicated LMDB (e.g. `data/pepbdb.lmdb`). Keys are the bare `source_key` returned by the iterator — **no source prefix is added**.
+- **Future merge step**: a separate script will be responsible for deduplicating and merging per-source LMDBs into a unified dataset, handling key conflicts across sources at that point.
 
 ## Output Schema
 
@@ -40,16 +45,16 @@ The data will be processed and stored in an LMDB file using the following core s
     "target": {
         "chain": "A",
         "length": N,                     // Integer length of binding site
-        "taxon_id": "9606",              // e.g., 9606 for Human
-        "protein_id": "P12345",          // e.g., UniProt ID P12345
+        "taxon_ids": ["9606"],           // List of NCBI Taxonomy IDs
+        "protein_ids": ["P12345"],       // List of UniProt accessions
         "sequence": "MVLSPADK...",       // binding site of length N
         "3d_coordinates": [N, 3]         // Numpy float32 array
     },
     "peptide": {
         "chain": "C",
         "length": P,                     // Integer length of peptide
-        "taxon_id": "111938",            // e.g., 111938 for Viral
-        "protein_id": "P98765",          // e.g., Parent UniProt ID P98765
+        "taxon_ids": ["111938"],         // List of NCBI Taxonomy IDs
+        "protein_ids": ["P98765"],       // List of UniProt accessions
         "sequence": "YGGFL",             // Peptide sequence of length P
         "3d_coordinates": [P, 3]         // Numpy float32 array
     }

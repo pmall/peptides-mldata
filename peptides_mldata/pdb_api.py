@@ -69,20 +69,24 @@ def fetch_batch_chain_metadata(pdb_ids: list[str], batch_size: int = 200) -> dic
             pdb_id = (entry.get("rcsb_id") or "").lower()
             chain_meta = {}
             for entity in (entry.get("polymer_entities") or []):
-                organisms = entity.get("rcsb_entity_source_organism") or []
-                taxon_id = None
-                if organisms:
-                    raw = organisms[0].get("ncbi_taxonomy_id")
-                    taxon_id = str(raw) if raw is not None else None
+                # Collect all unique biological source taxon IDs
+                taxon_ids = set()
+                source_orgs = entity.get("rcsb_entity_source_organism") or []
+                for org in source_orgs:
+                    if org.get("ncbi_taxonomy_id"):
+                        taxon_ids.add(str(org["ncbi_taxonomy_id"]))
 
                 ids_block = entity.get("rcsb_polymer_entity_container_identifiers") or {}
                 uniprot_ids = ids_block.get("uniprot_ids") or []
+                uniprot_list = sorted(list(set(i for i in uniprot_ids if i)))
+
                 auth_chains = ids_block.get("auth_asym_ids") or []
+                taxon_list = sorted(list(taxon_ids))
 
                 for chain in auth_chains:
                     chain_meta[chain] = {
-                        "taxon_id": taxon_id,
-                        "uniprot_ids": uniprot_ids,
+                        "taxon_ids": taxon_list,
+                        "uniprot_ids": uniprot_list,
                     }
             result[pdb_id] = chain_meta
 

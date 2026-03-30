@@ -10,7 +10,7 @@ NONSTANDARD = False
 
 SITE_BIN_SIZE = 32
 
-def analyze_pepbdb(min_pep_len: int, max_pep_len: int):
+def analyze_pepbdb(min_pep_len: int, max_pep_len: int, archive_path: str):
     print(f"High-Quality PepBDB Analysis")
     print(f"Filters: Pep [{min_pep_len}-{max_pep_len}] | Res [{RESOL_MIN}-{RESOL_MAX}] | Type: {MOL_TYPE} | Std AA: {not NONSTANDARD}\n")
 
@@ -19,7 +19,7 @@ def analyze_pepbdb(min_pep_len: int, max_pep_len: int):
 
     # Using the standard iterator filters
     iterator = iter_pepbdb(
-        archive_path="data/pepbdb-20200318.zip",
+        archive_path=archive_path,
         nonstandard_aa=NONSTANDARD,
         resolution_min=RESOL_MIN,
         resolution_max=RESOL_MAX,
@@ -70,11 +70,13 @@ def analyze_pepbdb(min_pep_len: int, max_pep_len: int):
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze PepBDB binding site lengths within peptide length constraints.")
+    parser.add_argument("archive_path", nargs="?", default="data/pepbdb-20200318.zip",
+                        help="Path to the PepBDB zip archive (default: data/pepbdb-20200318.zip)")
     parser.add_argument("--min_pep_len", type=int, default=4, help="Minimum peptide length (default: 4)")
     parser.add_argument("--max_pep_len", type=int, default=32, help="Maximum peptide length (default: 32)")
     args = parser.parse_args()
 
-    analyze_pepbdb(args.min_pep_len, args.max_pep_len)
+    analyze_pepbdb(args.min_pep_len, args.max_pep_len, args.archive_path)
 
 if __name__ == "__main__":
     main()
